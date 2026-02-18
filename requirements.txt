@@ -1,0 +1,4 @@
+esptool==5.1.0
+sv-ttk==2.6.1
+pyserial==3.5
+esp_idf_nvs_partition_gen==0.2.0 

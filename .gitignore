@@ -1,0 +1,33 @@
+# PlatformIO
+.pio/
+.platformio/
+
+# IDE
+.vscode/
+.claude
+.kilocode/
+
+# Environment
+.venv
+__pycache__
+*.pyc
+
+# Secrets & config
+.env
+
+# App-specific
+uploaderGUI.json
+
+
+# Utils
+!external_lib/mklittlefs/
+!external_lib/nvs/
+external_lib/mklittlefs/*
+external_lib/nvs/*
+!external_lib/mklittlefs/.gitkeep
+!external_lib/nvs/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+nul
