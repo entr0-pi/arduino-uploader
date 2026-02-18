@@ -108,6 +108,11 @@ class NvsTabUI:
         # Write to device
         row_write = ttk.Frame(container)
         row_write.pack(fill=tk.X, pady=(8, 0))
+        ttk.Checkbutton(
+            row_write,
+            text="Erase NVS before write",
+            variable=self.app.config_tab.erase_nvs_var,
+        ).pack(side=tk.LEFT, padx=(0, 8))
         self.write_btn = tk.Button(
             row_write, text="Write to Device",
             command=self._start_write_thread,

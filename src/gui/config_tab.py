@@ -163,11 +163,6 @@ class ConfigTabUI:
             nvs_keys_row, text="Browse", command=lambda: self._browse_file(self.nvs_keys_h_var, "Header", "*.h")
         ).grid(row=0, column=1, padx=(8, 0))
 
-        toggle_col = ttk.Frame(card2)
-        toggle_col.grid(row=2, column=1, rowspan=2, sticky=tk.NW, pady=(0, 0))
-        ttk.Checkbutton(toggle_col, text="Erase FS partition before flash", variable=self.erase_fs_var).pack(anchor=tk.W)
-        ttk.Checkbutton(toggle_col, text="Erase NVS before write", variable=self.erase_nvs_var).pack(anchor=tk.W, pady=(6, 0))
-
         # Card 3: options + status + actions
         card3 = ttk.LabelFrame(container, text="Environment & Actions", padding=12)
         card3.pack(fill=tk.X)

@@ -26,6 +26,8 @@ class AppConfig:
     esptool_baud: str = "921600"
     littlefs_block_size: int = 4096
     littlefs_page_size: int = 256
+    littlefs_raw_target_dir: str = ""
+    littlefs_gzip_target_dir: str = ""
 
 
 def _is_path_field(field_name: str) -> bool:

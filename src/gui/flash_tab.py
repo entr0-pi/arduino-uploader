@@ -21,6 +21,11 @@ class FlashTabUI:
         container = ttk.Frame(self.frame, padding=20)
         container.pack(fill=tk.BOTH, expand=True)
 
+        self.raw_target_dir_var = tk.StringVar(value=self.app.config.littlefs_raw_target_dir)
+        self.gzip_target_dir_var = tk.StringVar(value=self.app.config.littlefs_gzip_target_dir)
+        self.raw_target_dir_var.trace_add("write", self._sync_target_dirs)
+        self.gzip_target_dir_var.trace_add("write", self._sync_target_dirs)
+
         ttk.Label(
             container, text="LittleFS Operations",
             font=("Segoe UI", 16, "bold"),
@@ -30,6 +35,23 @@ class FlashTabUI:
             text="Use Configuration tab for COM, paths, and options. This tab only runs the flash operation.",
             font=("Segoe UI", 10),
         ).pack(anchor=tk.W, pady=(0, 12))
+
+        targets = ttk.LabelFrame(container, text="LittleFS Target Folders", padding=10)
+        targets.pack(fill=tk.X, pady=(0, 10))
+        targets.columnconfigure(0, weight=1)
+        targets.columnconfigure(1, weight=1)
+
+        ttk.Label(targets, text="RAW DATA target folder (empty = /)").grid(row=0, column=0, sticky=tk.W, padx=(0, 8))
+        ttk.Label(targets, text="GZIP DATA target folder (empty = /)").grid(row=0, column=1, sticky=tk.W)
+
+        ttk.Entry(targets, textvariable=self.raw_target_dir_var).grid(row=1, column=0, sticky=tk.EW, padx=(0, 8), pady=(4, 0))
+        ttk.Entry(targets, textvariable=self.gzip_target_dir_var).grid(row=1, column=1, sticky=tk.EW, pady=(4, 0))
+
+        ttk.Checkbutton(
+            container,
+            text="Erase FS partition before flash",
+            variable=self.app.config_tab.erase_fs_var,
+        ).pack(anchor=tk.W, pady=(0, 8))
 
         btns = ttk.Frame(container)
         btns.pack(fill=tk.X, pady=(8, 0))
@@ -42,6 +64,10 @@ class FlashTabUI:
             relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2",
         )
         self.run_btn.pack(side=tk.LEFT)
+
+    def _sync_target_dirs(self, *_args):
+        self.app.config.littlefs_raw_target_dir = self.raw_target_dir_var.get().strip()
+        self.app.config.littlefs_gzip_target_dir = self.gzip_target_dir_var.get().strip()
 
     # ------------------------------------------------------------------
 
@@ -70,6 +96,8 @@ class FlashTabUI:
                 block_size=cfg.littlefs_block_size,
                 page_size=cfg.littlefs_page_size,
                 baud=cfg.esptool_baud,
+                raw_target_dir=cfg.littlefs_raw_target_dir,
+                gzip_target_dir=cfg.littlefs_gzip_target_dir,
                 logger=self.app.log,
                 progress_cb=self.app.update_progress,
             )

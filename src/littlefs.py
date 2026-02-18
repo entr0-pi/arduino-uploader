@@ -22,9 +22,21 @@ def _human_bytes(size: int) -> str:
     return f"{value:.2f} {units[unit]}"
 
 
+def _resolve_target_dir(staging_dir: str, subdir: str) -> str:
+    """Resolve a user-provided LittleFS subdir under staging root."""
+    cleaned = (subdir or "").strip().replace("\\", "/").strip("/")
+    if not cleaned:
+        return staging_dir
+    parts = [p for p in cleaned.split("/") if p and p not in (".", "..")]
+    target = os.path.join(staging_dir, *parts)
+    os.makedirs(target, exist_ok=True)
+    return target
+
+
 def stage_data_files(
     data_dir: str,
     staging_dir: str,
+    target_subdir: str = "",
     logger: Callable[[str], None] | None = None,
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> int:
@@ -36,14 +48,16 @@ def stage_data_files(
             progress_cb(30, "No data files to stage")
         return 0
 
+    data_staging = _resolve_target_dir(staging_dir, target_subdir)
     files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
     total = len(files)
     total_bytes = 0
     if logger:
         logger("========== RAW DATA ==========")
+        logger(f"[RAW DATA] target=/{target_subdir.strip('/').replace('\\', '/')}" if target_subdir.strip() else "[RAW DATA] target=/")
     for idx, f in enumerate(files):
         src = os.path.join(data_dir, f)
-        shutil.copy2(src, staging_dir)
+        shutil.copy2(src, data_staging)
         size = os.path.getsize(src)
         total_bytes += size
         if logger:
@@ -58,11 +72,12 @@ def stage_data_files(
 def stage_web_files(
     web_dir: str,
     staging_dir: str,
+    target_subdir: str = "",
     logger: Callable[[str], None] | None = None,
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> int:
     """Gzip all web files into ``<staging_dir>/`` root. Returns the file count."""
-    web_staging = staging_dir
+    web_staging = _resolve_target_dir(staging_dir, target_subdir)
 
     if not os.path.isdir(web_dir):
         if logger:
@@ -81,6 +96,7 @@ def stage_web_files(
     total_gz = 0
     if logger:
         logger("========== GZIP DATA ==========")
+        logger(f"[GZIP DATA] target=/{target_subdir.strip('/').replace('\\', '/')}" if target_subdir.strip() else "[GZIP DATA] target=/")
     for idx, f in enumerate(files):
         src = os.path.join(web_dir, f)
         dst = os.path.join(web_staging, f + ".gz")
@@ -164,6 +180,8 @@ def flash_littlefs(
     block_size: int = 4096,
     page_size: int = 256,
     baud: str = "921600",
+    raw_target_dir: str = "",
+    gzip_target_dir: str = "",
     logger: Callable[[str], None] | None = None,
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> None:
@@ -180,8 +198,20 @@ def flash_littlefs(
     image_path = tempfile.mktemp(suffix=".bin", prefix="littlefs_")
     staging = tempfile.mkdtemp(prefix="littlefs_staging_")
     try:
-        data_count = stage_data_files(data_dir, staging, logger=logger, progress_cb=progress_cb)
-        web_count = stage_web_files(web_dir, staging, logger=logger, progress_cb=progress_cb)
+        data_count = stage_data_files(
+            data_dir,
+            staging,
+            target_subdir=raw_target_dir,
+            logger=logger,
+            progress_cb=progress_cb,
+        )
+        web_count = stage_web_files(
+            web_dir,
+            staging,
+            target_subdir=gzip_target_dir,
+            logger=logger,
+            progress_cb=progress_cb,
+        )
         if logger:
             logger("========== STAGING SUMMARY ==========")
             logger(f"[STAGING] data={data_count} file(s), web(gz)={web_count} file(s)")
