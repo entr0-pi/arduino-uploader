@@ -61,7 +61,7 @@ Contents of `requirements.txt`:
 
 | Package | Purpose |
 |---------|---------|
-| `esptool` | Flashing firmware and filesystem images to ESP devices |
+| `esptool` | Flashing LittleFS and NVS partition images to ESP devices |
 | `sv-ttk` | Sun Valley dark theme for Tkinter |
 | `pyserial` | Serial port detection and access |
 | `esp_idf_nvs_partition_gen` | NVS binary generation support |
