@@ -4,6 +4,10 @@ A standalone desktop GUI application for flashing **LittleFS filesystem images**
 
 Built with Python and Tkinter, this tool provides a visual interface for operations that typically require command-line tools and manual partition offset calculations.
 
+## What this app is about
+
+This app simplifies ESP32 provisioning by letting you build and flash LittleFS and NVS partitions from one GUI. The main benefit is faster, safer uploads: fewer manual commands, automatic partition offset handling, and reduced configuration mistakes.
+
 ---
 
 ## Features
