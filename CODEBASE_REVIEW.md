@@ -15,14 +15,16 @@ The project is organized cleanly into business logic (`src/*.py`) and GUI (`src/
 - `refresh_status()` only drives coarse readiness labels (`Ready`, `Partially ready`) and button state, while many prerequisites (port selected, chip detection confidence, directory file quality) are implicit.
 
 **Enhancements**
-1. Add a **Setup Checklist panel** with explicit checks:
-   - serial port selected and currently available
-   - chip selected or detected
-   - `partitions.csv` valid and parseable
-   - required tools executable
-   - at least one staging source folder non-empty
-2. Add clickable “Fix” actions per failed check (open file chooser, refresh ports, etc.).
-3. Add “last successful flash/write” timestamp and summary in the UI.
+1. Add an explicit startup intent question: **« what do you want to do? »** with three choices:
+   - NVS update
+   - flashing data in littlefs
+   - both
+2. Adapt the **live checklist** dynamically based on that choice:
+   - **NVS update**: port/chip, `partitions.csv` parse check, NVS tool path, NVS CSV/table readiness, optional `nvs_keys.h` consistency status
+   - **flashing data in littlefs**: port/chip, `partitions.csv` parse check, `mklittlefs` path, LittleFS input folders and file counts
+   - **both**: union of both checklists with grouped sections
+3. Add clickable “Fix” actions per failed check (open file chooser, refresh ports, etc.).
+4. Add “last successful flash/write” timestamp and summary in the UI.
 
 **Expected impact**
 - Fewer “nothing happens” and “why is button disabled?” support issues.
