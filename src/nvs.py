@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Callable, TypedDict
 
-from .esptool_wrapper import run_python, run_with_fallbacks
+from .esptool_wrapper import read_flash_region, run_python, run_with_fallbacks
+from .exceptions import ToolExecutionError
 from .validators import (
     validate_baud_rate,
     validate_boolean,
@@ -235,6 +236,7 @@ def flash_nvs(
     partition_size: int,
     erase_first: bool = False,
     baud: str = "921600",
+    verify: bool = False,
     logger: Callable[[str], None] | None = None,
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> None:
@@ -270,6 +272,26 @@ def flash_nvs(
              "write-flash", hex(offset), bin_path],
             logger=logger,
         )
+
+        if verify:
+            import hashlib
+            if progress_cb:
+                progress_cb(92, "Verifying NVS flash...")
+            if logger:
+                logger(">>> Verifying NVS flash contents...")
+            verify_path = os.path.join(tmp, "verify.bin")
+            read_flash_region(chip, port, baud, offset, partition_size, verify_path, logger=logger)
+            with open(bin_path, "rb") as f:
+                expected = hashlib.sha256(f.read()).hexdigest()
+            with open(verify_path, "rb") as f:
+                actual = hashlib.sha256(f.read()[:partition_size]).hexdigest()
+            if expected != actual:
+                raise ToolExecutionError(
+                    "verify", 1,
+                    remediation="NVS verification failed. The data on device does not match the binary. Try writing again.",
+                )
+            if logger:
+                logger(f"[VERIFY] SHA-256 match: {expected[:16]}...")
 
     if progress_cb:
         progress_cb(100, "NVS write complete!")

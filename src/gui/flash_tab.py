@@ -1,11 +1,11 @@
 """Littlefs Upload tab."""
 
-import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from ..littlefs import flash_littlefs
+from ..littlefs import flash_littlefs, human_bytes
 from ..partitions import get_partition
+from .theme import FONT_BODY, FONT_HEADING, danger_button_style
 
 
 class FlashTabUI:
@@ -28,12 +28,12 @@ class FlashTabUI:
 
         ttk.Label(
             container, text="LittleFS Operations",
-            font=("Segoe UI", 16, "bold"),
+            font=FONT_HEADING,
         ).pack(anchor=tk.W, pady=(0, 20))
         ttk.Label(
             container,
             text="Use Configuration tab for COM, paths, and options. This tab only runs the flash operation.",
-            font=("Segoe UI", 10),
+            font=FONT_BODY,
         ).pack(anchor=tk.W, pady=(0, 12))
 
         targets = ttk.LabelFrame(container, text="LittleFS Target Folders", padding=10)
@@ -59,9 +59,7 @@ class FlashTabUI:
             btns,
             text="Build & Flash LittleFS",
             command=self._start_flash_thread,
-            bg="#d64b4b", fg="#ffffff",
-            activebackground="#be3f3f", activeforeground="#ffffff",
-            relief=tk.FLAT, bd=0, padx=12, pady=6, cursor="hand2",
+            **danger_button_style(),
         )
         self.run_btn.pack(side=tk.LEFT)
 
@@ -76,36 +74,48 @@ class FlashTabUI:
             self.app.log("[ERROR] Environment checks are not ready.")
             return
         self.app.save_config()
-        self.app.show_progress("LittleFS Flash Progress")
-        self.app.set_buttons_busy(True)
-        threading.Thread(target=self._run_flash, daemon=True).start()
+
+        cfg = self.app.config
+        if cfg.erase_fs:
+            try:
+                fs = get_partition(cfg.csv_path, "spiffs", logger=self.app.log)
+                size_str = human_bytes(fs["size"])
+                detail = (
+                    f"Partition: spiffs\n"
+                    f"Offset: {hex(fs['offset'])}\n"
+                    f"Size: {size_str}\n\n"
+                    f"This will erase the entire FS partition before flashing.\n"
+                    f"Continue?"
+                )
+            except Exception:
+                detail = "Erase FS partition before flashing?\n\n(Could not read partition details.)"
+            if not messagebox.askyesno("Confirm Erase", detail):
+                return
+
+        self.app.run_background_operation(
+            title="LittleFS Flash Progress",
+            worker_fn=self._run_flash,
+            success_message="Filesystem flashed successfully.",
+        )
 
     def _run_flash(self):
-        try:
-            cfg = self.app.config
-            fs = get_partition(cfg.csv_path, "spiffs", logger=self.app.log)
-            flash_littlefs(
-                chip=cfg.chip,
-                port=cfg.port,
-                mklittlefs_path=cfg.mklittlefs_path,
-                data_dir=cfg.data_dir,
-                web_dir=cfg.web_dir,
-                offset=fs["offset"],
-                partition_size=fs["size"],
-                erase_first=cfg.erase_fs,
-                block_size=cfg.littlefs_block_size,
-                page_size=cfg.littlefs_page_size,
-                baud=cfg.esptool_baud,
-                raw_target_dir=cfg.littlefs_raw_target_dir,
-                gzip_target_dir=cfg.littlefs_gzip_target_dir,
-                logger=self.app.log,
-                progress_cb=self.app.update_progress,
-            )
-            self.app.log("[SUCCESS] LittleFS flashed successfully.")
-            self.app.root.after(0, messagebox.showinfo, "Success", "Filesystem flashed successfully.")
-        except Exception as e:
-            self.app.log(f"[ERROR] {e}")
-            self.app.root.after(0, messagebox.showerror, "Error", str(e))
-        finally:
-            self.app.root.after(0, self.app.close_progress)
-            self.app.root.after(0, self.app.set_buttons_busy, False)
+        cfg = self.app.config
+        fs = get_partition(cfg.csv_path, "spiffs", logger=self.app.log)
+        flash_littlefs(
+            chip=cfg.chip,
+            port=cfg.port,
+            mklittlefs_path=cfg.mklittlefs_path,
+            data_dir=cfg.data_dir,
+            web_dir=cfg.web_dir,
+            offset=fs["offset"],
+            partition_size=fs["size"],
+            erase_first=cfg.erase_fs,
+            block_size=cfg.littlefs_block_size,
+            page_size=cfg.littlefs_page_size,
+            baud=cfg.esptool_baud,
+            raw_target_dir=cfg.littlefs_raw_target_dir,
+            gzip_target_dir=cfg.littlefs_gzip_target_dir,
+            verify=cfg.verify_after_write,
+            logger=self.app.log,
+            progress_cb=self.app.update_progress,
+        )

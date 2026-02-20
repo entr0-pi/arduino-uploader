@@ -1,12 +1,13 @@
 """NVS Editor tab."""
 
 import os
-import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from ..littlefs import human_bytes
 from ..nvs import NvsRow, flash_nvs, read_nvs_csv, validate_nvs_rows, write_nvs_csv
 from ..partitions import get_partition
+from .theme import ERROR, FONT_MONO_SMALL, FONT_SMALL, FONT_SUBHEADING, MUTED, OK, WARN, danger_button_style, primary_button_style
 
 
 class NvsTabUI:
@@ -28,7 +29,7 @@ class NvsTabUI:
         container = ttk.Frame(self.frame, padding=16)
         container.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(container, text="NVS Variables", font=("Segoe UI", 15, "bold")).pack(anchor=tk.W, pady=(0, 10))
+        ttk.Label(container, text="NVS Variables", font=FONT_SUBHEADING).pack(anchor=tk.W, pady=(0, 10))
 
         # Entry fields
         top = ttk.Frame(container)
@@ -100,9 +101,7 @@ class NvsTabUI:
         for text, cmd in [("Export CSV", self._export_csv), ("Import CSV", self._import_csv)]:
             tk.Button(
                 row, text=text, command=cmd,
-                bg="#2e79d1", fg="#ffffff",
-                activebackground="#2667b3", activeforeground="#ffffff",
-                relief=tk.FLAT, bd=0, padx=10, pady=4, cursor="hand2",
+                **primary_button_style(),
             ).pack(side=tk.LEFT, padx=(8, 0))
 
         # Write to device
@@ -116,12 +115,10 @@ class NvsTabUI:
         self.write_btn = tk.Button(
             row_write, text="Write to Device",
             command=self._start_write_thread,
-            bg="#d64b4b", fg="#ffffff",
-            activebackground="#be3f3f", activeforeground="#ffffff",
-            relief=tk.FLAT, bd=0, padx=12, pady=4, cursor="hand2",
+            **danger_button_style(),
         )
         self.write_btn.pack(side=tk.LEFT, padx=(8, 0))
-        self.consistency_label = ttk.Label(row_write, text="", font=("Segoe UI", 9))
+        self.consistency_label = ttk.Label(row_write, text="", font=FONT_SMALL)
         self.consistency_label.pack(side=tk.LEFT, padx=(20, 0))
 
     # ------------------------------------------------------------------
@@ -237,15 +234,72 @@ class NvsTabUI:
             n = len(issues)
             self.consistency_label.config(
                 text=f"\u274c NVS validation issues ({n} issue{'s' if n != 1 else ''})",
-                foreground="#e05555",
+                foreground=ERROR,
             )
             self._nvs_consistency_issues = issues
         else:
             if h_path and os.path.isfile(h_path):
-                self.consistency_label.config(text="\u2705 NVS keys consistent with nvs_keys.h", foreground="#4ec969")
+                self.consistency_label.config(text="\u2705 NVS keys consistent with nvs_keys.h", foreground=OK)
             else:
-                self.consistency_label.config(text="nvs_keys.h not configured \u2014 consistency check skipped", foreground="#888888")
+                self.consistency_label.config(text="nvs_keys.h not configured \u2014 consistency check skipped", foreground=MUTED)
             self._nvs_consistency_issues = []
+
+    # ------------------------------------------------------------------
+    # Validation dialog
+    # ------------------------------------------------------------------
+
+    def _show_validation_dialog(self, issues: list[str]) -> bool:
+        """Show a structured validation dialog. Returns True if user chooses to proceed."""
+        dlg = tk.Toplevel(self.app.root)
+        dlg.title("NVS Validation Warning")
+        dlg.geometry("560x370")
+        dlg.resizable(True, True)
+        dlg.transient(self.app.root)
+        dlg.grab_set()
+
+        result = [False]
+
+        frame = ttk.Frame(dlg, padding=12)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            frame,
+            text=f"{len(issues)} validation issue{'s' if len(issues) != 1 else ''} found:",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(anchor=tk.W, pady=(0, 8))
+
+        text = tk.Text(frame, wrap=tk.WORD, font=("Consolas", 9), state="normal")
+        text.tag_configure("header_issue", foreground=WARN)
+        text.tag_configure("value_issue", foreground=ERROR)
+        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+
+        for issue in issues:
+            tag = "header_issue" if issue.lstrip().startswith(("namespace", "[")) else "value_issue"
+            text.insert(tk.END, f"  {issue}\n", tag)
+
+        text.configure(state="disabled")
+        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        btn_row = ttk.Frame(dlg, padding=(12, 0, 12, 12))
+        btn_row.pack(fill=tk.X)
+
+        def _copy():
+            dlg.clipboard_clear()
+            dlg.clipboard_append("\n".join(issues))
+
+        def _proceed():
+            result[0] = True
+            dlg.destroy()
+
+        ttk.Button(btn_row, text="Copy to Clipboard", command=_copy).pack(side=tk.LEFT)
+        ttk.Button(btn_row, text="Cancel", command=dlg.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btn_row, text="Proceed Anyway", command=_proceed).pack(side=tk.RIGHT, padx=(0, 8))
+
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+        dlg.wait_window()
+        return result[0]
 
     # ------------------------------------------------------------------
     # Write to device
@@ -259,34 +313,46 @@ class NvsTabUI:
         h_path = self.app.config.nvs_keys_h_path
         issues = validate_nvs_rows(rows, header_path=h_path)
         if issues:
-            msg = "NVS validation issues:\n\n" + "\n".join(issues) + "\n\nProceed anyway?"
-            if not messagebox.askyesno("NVS Validation Warning", msg):
+            if not self._show_validation_dialog(issues):
                 return
-        self.app.show_progress("NVS Write Progress")
-        self.app.set_buttons_busy(True)
-        threading.Thread(target=self._write_to_device, args=(rows,), daemon=True).start()
+
+        cfg = self.app.config
+        if cfg.erase_nvs:
+            try:
+                nvs = get_partition(cfg.csv_path, "nvs", logger=self.app.log)
+                size_str = human_bytes(nvs["size"])
+                detail = (
+                    f"Partition: nvs\n"
+                    f"Offset: {hex(nvs['offset'])}\n"
+                    f"Size: {size_str}\n\n"
+                    f"This will erase the entire NVS partition before writing.\n"
+                    f"Continue?"
+                )
+            except Exception:
+                detail = "Erase NVS partition before writing?\n\n(Could not read partition details.)"
+            if not messagebox.askyesno("Confirm Erase", detail):
+                return
+
+        self.app.run_background_operation(
+            title="NVS Write Progress",
+            worker_fn=lambda: self._write_to_device(rows),
+            success_message="NVS variables written successfully.",
+            error_title="NVS write failed",
+        )
 
     def _write_to_device(self, rows: list[NvsRow]):
-        try:
-            cfg = self.app.config
-            nvs = get_partition(cfg.csv_path, "nvs", logger=self.app.log)
-            flash_nvs(
-                chip=cfg.chip,
-                port=cfg.port,
-                nvs_gen_py=cfg.nvs_gen_py,
-                rows=rows,
-                offset=nvs["offset"],
-                partition_size=nvs["size"],
-                erase_first=cfg.erase_nvs,
-                baud=cfg.esptool_baud,
-                logger=self.app.log,
-                progress_cb=self.app.update_progress,
-            )
-            self.app.log("[SUCCESS] NVS partition flashed successfully.")
-            self.app.root.after(0, messagebox.showinfo, "Success", "NVS variables written successfully.")
-        except Exception as e:
-            self.app.log(f"[ERROR] {e}")
-            self.app.root.after(0, messagebox.showerror, "NVS write failed", str(e))
-        finally:
-            self.app.root.after(0, self.app.close_progress)
-            self.app.root.after(0, self.app.set_buttons_busy, False)
+        cfg = self.app.config
+        nvs = get_partition(cfg.csv_path, "nvs", logger=self.app.log)
+        flash_nvs(
+            chip=cfg.chip,
+            port=cfg.port,
+            nvs_gen_py=cfg.nvs_gen_py,
+            rows=rows,
+            offset=nvs["offset"],
+            partition_size=nvs["size"],
+            erase_first=cfg.erase_nvs,
+            baud=cfg.esptool_baud,
+            verify=cfg.verify_after_write,
+            logger=self.app.log,
+            progress_cb=self.app.update_progress,
+        )

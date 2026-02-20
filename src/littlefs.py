@@ -7,10 +7,11 @@ import subprocess
 import tempfile
 from typing import Callable
 
-from .esptool_wrapper import run_python
+from .esptool_wrapper import read_flash_region, run_python
+from .exceptions import ToolExecutionError
 
 
-def _human_bytes(size: int) -> str:
+def human_bytes(size: int) -> str:
     units = ["B", "KB", "MB", "GB"]
     value = float(size)
     unit = 0
@@ -61,11 +62,11 @@ def stage_data_files(
         size = os.path.getsize(src)
         total_bytes += size
         if logger:
-            logger(f"[RAW DATA] {idx + 1:>2}/{total:<2}  {f}  [{_human_bytes(size)}]")
+            logger(f"[RAW DATA] {idx + 1:>2}/{total:<2}  {f}  [{human_bytes(size)}]")
         if progress_cb and total:
             progress_cb(10 + (idx / total) * 20, f"Staging data file {idx + 1}/{total}")
     if logger:
-        logger(f"[RAW DATA] Summary: {total} file(s), total={_human_bytes(total_bytes)}")
+        logger(f"[RAW DATA] Summary: {total} file(s), total={human_bytes(total_bytes)}")
     return total
 
 
@@ -113,10 +114,10 @@ def stage_web_files(
                 ratio = (1.0 - (gz_size / raw_size)) * 100.0
                 logger(
                     f"[GZIP DATA] {idx + 1:>2}/{total:<2}  {f}.gz  "
-                    f"[{_human_bytes(raw_size)} -> {_human_bytes(gz_size)}, {ratio:.1f}% saved]"
+                    f"[{human_bytes(raw_size)} -> {human_bytes(gz_size)}, {ratio:.1f}% saved]"
                 )
             else:
-                logger(f"[GZIP DATA] {idx + 1:>2}/{total:<2}  {f}.gz  [0 B -> {_human_bytes(gz_size)}]")
+                logger(f"[GZIP DATA] {idx + 1:>2}/{total:<2}  {f}.gz  [0 B -> {human_bytes(gz_size)}]")
         if progress_cb and total:
             progress_cb(50 + (idx / total) * 20, f"Staging web file {idx + 1}/{total}")
     if logger:
@@ -124,10 +125,10 @@ def stage_web_files(
             saved = (1.0 - (total_gz / total_raw)) * 100.0
             logger(
                 f"[GZIP DATA] Summary: {total} file(s), "
-                f"{_human_bytes(total_raw)} -> {_human_bytes(total_gz)} ({saved:.1f}% saved)"
+                f"{human_bytes(total_raw)} -> {human_bytes(total_gz)} ({saved:.1f}% saved)"
             )
         else:
-            logger(f"[GZIP DATA] Summary: {total} file(s), 0 B -> {_human_bytes(total_gz)}")
+            logger(f"[GZIP DATA] Summary: {total} file(s), 0 B -> {human_bytes(total_gz)}")
     return total
 
 
@@ -161,9 +162,7 @@ def build_image(
         if result.stderr:
             logger(result.stderr.rstrip())
     if result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode, cmd, output=result.stdout, stderr=result.stderr
-        )
+        raise ToolExecutionError("mklittlefs", result.returncode, stderr=result.stderr or "")
     if progress_cb:
         progress_cb(85, "LittleFS image built")
 
@@ -182,6 +181,7 @@ def flash_littlefs(
     baud: str = "921600",
     raw_target_dir: str = "",
     gzip_target_dir: str = "",
+    verify: bool = False,
     logger: Callable[[str], None] | None = None,
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> None:
@@ -195,9 +195,11 @@ def flash_littlefs(
     if progress_cb:
         progress_cb(5, "Partition info loaded")
 
-    image_path = tempfile.mktemp(suffix=".bin", prefix="littlefs_")
-    staging = tempfile.mkdtemp(prefix="littlefs_staging_")
-    try:
+    with tempfile.TemporaryDirectory(prefix="littlefs_") as tmpdir:
+        staging = os.path.join(tmpdir, "staging")
+        os.makedirs(staging)
+        image_path = os.path.join(tmpdir, "littlefs.bin")
+
         data_count = stage_data_files(
             data_dir,
             staging,
@@ -216,10 +218,7 @@ def flash_littlefs(
             logger("========== STAGING SUMMARY ==========")
             logger(f"[STAGING] data={data_count} file(s), web(gz)={web_count} file(s)")
         build_image(mklittlefs_path, staging, image_path, partition_size, block_size=block_size, page_size=page_size, logger=logger, progress_cb=progress_cb)
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
 
-    try:
         if erase_first:
             if logger:
                 logger(">>> Erasing FS partition...")
@@ -241,8 +240,25 @@ def flash_littlefs(
             logger=logger,
         )
 
+        if verify:
+            import hashlib
+            if progress_cb:
+                progress_cb(97, "Verifying flash...")
+            if logger:
+                logger(">>> Verifying flash contents...")
+            verify_path = os.path.join(tmpdir, "verify.bin")
+            read_flash_region(chip, port, baud, offset, partition_size, verify_path, logger=logger)
+            with open(image_path, "rb") as f:
+                expected = hashlib.sha256(f.read()).hexdigest()
+            with open(verify_path, "rb") as f:
+                actual = hashlib.sha256(f.read()[:partition_size]).hexdigest()
+            if expected != actual:
+                raise ToolExecutionError(
+                    "verify", 1,
+                    remediation="Flash verification failed. The data on device does not match the image. Try flashing again.",
+                )
+            if logger:
+                logger(f"[VERIFY] SHA-256 match: {expected[:16]}...")
+
         if progress_cb:
             progress_cb(100, "Flash complete!")
-    finally:
-        if os.path.isfile(image_path):
-            os.remove(image_path)

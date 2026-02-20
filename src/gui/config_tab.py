@@ -7,6 +7,7 @@ from tkinter import filedialog, ttk
 
 from ..esptool_wrapper import detect_chip_family, detect_serial_ports
 from ..validators import VALID_CHIPS, sanitize_chip
+from .theme import ERROR, FONT_BODY, FONT_HEADING, FONT_MONO_SMALL, FONT_STATUS, MUTED, OK, WARN
 
 COMMON_BAUD_RATES = ["115200", "230400", "460800", "921600"]
 
@@ -30,7 +31,7 @@ class ConfigTabUI:
         container = ttk.Frame(self.frame, padding=20)
         container.pack(fill=tk.BOTH, expand=True)
 
-        ttk.Label(container, text="Main Information", font=("Segoe UI", 16, "bold")).pack(anchor=tk.W, pady=(0, 20))
+        ttk.Label(container, text="Main Information", font=FONT_HEADING).pack(anchor=tk.W, pady=(0, 20))
 
         default_port = ""
         self.default_port = default_port
@@ -47,6 +48,7 @@ class ConfigTabUI:
         self.baud_var = tk.StringVar(value=self.app.config.esptool_baud)
         self.block_size_var = tk.StringVar(value=str(self.app.config.littlefs_block_size))
         self.page_size_var = tk.StringVar(value=str(self.app.config.littlefs_page_size))
+        self.verify_var = tk.BooleanVar(value=self.app.config.verify_after_write)
         self.show_advanced_var = tk.BooleanVar(value=False)
 
         # Refresh status when paths change
@@ -131,6 +133,11 @@ class ConfigTabUI:
         ttk.Entry(self.adv_row, textvariable=self.page_size_var, width=12).grid(
             row=1, column=2, sticky=tk.EW, padx=(6, 0), pady=(4, 0)
         )
+        ttk.Checkbutton(
+            self.adv_row,
+            text="Verify after write (slower)",
+            variable=self.verify_var,
+        ).grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
         self._toggle_advanced_params()
 
         # Card 2: directories + nvs keys
@@ -178,13 +185,13 @@ class ConfigTabUI:
         status_files.grid(row=0, column=1, sticky=tk.NSEW, padx=(6, 0))
 
         self.status_labels = {}
-        for key in ("mklittlefs", "nvsgen", "csv"):
-            self.status_labels[key] = ttk.Label(status_libs, text="", font=("Segoe UI", 10))
+        for key in ("port", "mklittlefs", "nvsgen", "csv"):
+            self.status_labels[key] = ttk.Label(status_libs, text="", font=FONT_BODY)
             self.status_labels[key].pack(anchor=tk.W, pady=2)
         for key in ("data", "data_files", "web", "web_files"):
-            lbl = ttk.Label(status_files, text="", font=("Segoe UI", 10))
+            lbl = ttk.Label(status_files, text="", font=FONT_BODY)
             if key.endswith("_files"):
-                lbl.configure(font=("Consolas", 9), foreground="#888888")
+                lbl.configure(font=FONT_MONO_SMALL, foreground=MUTED)
                 lbl.pack(anchor=tk.W, pady=(0, 4), padx=(16, 0))
             else:
                 lbl.pack(anchor=tk.W, pady=2)
@@ -195,7 +202,7 @@ class ConfigTabUI:
         btns.pack(fill=tk.X, pady=(16, 0))
         ttk.Button(btns, text="Refresh", command=self._on_refresh_click).pack(side=tk.LEFT)
         ttk.Button(btns, text="Save Configuration", command=self.app.save_config).pack(side=tk.LEFT, padx=(8, 0))
-        self.readiness_label = ttk.Label(btns, text="", font=("Segoe UI", 11, "bold"))
+        self.readiness_label = ttk.Label(btns, text="", font=FONT_STATUS)
         self.readiness_label.pack(side=tk.LEFT, padx=(20, 0))
 
     # ------------------------------------------------------------------
@@ -280,11 +287,13 @@ class ConfigTabUI:
 
     def refresh_status(self) -> bool:
         """Update all status labels and return whether FS flash is ready."""
-        ok_color = "#4ec969"
-        warn_color = "#e0a820"
-        err_color = "#e05555"
+        ok_color = OK
+        warn_color = WARN
+        err_color = ERROR
 
+        port_selected = bool(self.port_var.get().strip())
         checks = {
+            "port": port_selected,
             "mklittlefs": os.path.isfile(self.mklittlefs_path_var.get()),
             "nvsgen": os.path.isfile(self.nvs_gen_py_var.get()),
             "csv": bool(self.csv_path_var.get() and os.path.isfile(self.csv_path_var.get())),
@@ -311,6 +320,11 @@ class ConfigTabUI:
             )
 
         # Update labels
+        port_text = self.port_var.get().strip() or "Not selected"
+        self.status_labels["port"].config(
+            text=f"Serial port: {port_text}",
+            foreground=ok_color if checks["port"] else warn_color,
+        )
         self.status_labels["mklittlefs"].config(
             text=f"mklittlefs: {'Found' if checks['mklittlefs'] else 'Missing'}",
             foreground=ok_color if checks["mklittlefs"] else err_color,
@@ -359,16 +373,36 @@ class ConfigTabUI:
         self.app.set_flash_ready(fs_ready)
         self.app.set_nvs_ready(nvs_ready)
 
-        if not checks["csv"]:
-            self.readiness_label.config(text="\u274c Not ready \u2014 partitions.csv is required", foreground=err_color)
-        elif fs_ready and nvs_ready:
+        if fs_ready and nvs_ready and checks["port"]:
             self.readiness_label.config(text="\u2705 Ready", foreground=ok_color)
-        elif fs_ready:
-            self.readiness_label.config(text="\u26a0\ufe0f Partially ready (LittleFS only)", foreground=warn_color)
-        elif nvs_ready:
-            self.readiness_label.config(text="\u26a0\ufe0f Partially ready (NVS only)", foreground=warn_color)
+        elif fs_ready and nvs_ready:
+            self.readiness_label.config(text="\u26a0\ufe0f Ready (no port selected)", foreground=warn_color)
+        elif fs_ready or nvs_ready:
+            missing = []
+            if not checks["port"]:
+                missing.append("serial port")
+            if not checks["csv"]:
+                missing.append("partitions.csv")
+            if not checks["mklittlefs"]:
+                missing.append("mklittlefs")
+            if not checks["nvsgen"]:
+                missing.append("nvs_partition_gen")
+            scope = "LittleFS only" if fs_ready else "NVS only"
+            detail = f" \u2014 missing: {', '.join(missing)}" if missing else ""
+            self.readiness_label.config(text=f"\u26a0\ufe0f Partially ready ({scope}){detail}", foreground=warn_color)
         else:
-            self.readiness_label.config(text="\u274c Not ready \u2014 partitions.csv is required", foreground=err_color)
+            missing = []
+            if not checks["port"]:
+                missing.append("serial port")
+            if not checks["csv"]:
+                missing.append("partitions.csv")
+            if not checks["mklittlefs"]:
+                missing.append("mklittlefs")
+            if not checks["nvsgen"]:
+                missing.append("nvs_partition_gen")
+            self.readiness_label.config(
+                text=f"\u274c Not ready \u2014 missing: {', '.join(missing)}", foreground=err_color,
+            )
 
         return fs_ready
 
@@ -384,6 +418,7 @@ class ConfigTabUI:
         cfg.csv_path = self.csv_path_var.get()
         cfg.erase_fs = self.erase_fs_var.get()
         cfg.erase_nvs = self.erase_nvs_var.get()
+        cfg.verify_after_write = self.verify_var.get()
         cfg.mklittlefs_path = self.mklittlefs_path_var.get()
         cfg.nvs_gen_py = self.nvs_gen_py_var.get()
         cfg.data_dir = self.data_dir_var.get()
@@ -409,6 +444,7 @@ class ConfigTabUI:
         self.csv_path_var.set(cfg.csv_path)
         self.erase_fs_var.set(cfg.erase_fs)
         self.erase_nvs_var.set(cfg.erase_nvs)
+        self.verify_var.set(cfg.verify_after_write)
         self.mklittlefs_path_var.set(cfg.mklittlefs_path)
         self.nvs_gen_py_var.set(cfg.nvs_gen_py)
         self.data_dir_var.set(cfg.data_dir)

@@ -4,6 +4,8 @@ import tkinter as tk
 import webbrowser
 from tkinter import ttk
 
+from .theme import FONT_BODY, FONT_MONO, LINK, TERMINAL_BG, TERMINAL_FG
+
 
 class TerminalTabUI:
     """Builds the Terminal Output tab and exposes the log area widget."""
@@ -18,8 +20,8 @@ class TerminalTabUI:
         frame = ttk.Frame(self.frame, padding=12)
         frame.pack(fill=tk.BOTH, expand=True)
         self.log_area = tk.Text(
-            frame, bg="#1e1e1e", fg="#ffffff", borderwidth=0,
-            font=("Consolas", 10), wrap=tk.WORD,
+            frame, bg=TERMINAL_BG, fg=TERMINAL_FG, borderwidth=0,
+            font=FONT_MONO, wrap=tk.WORD,
         )
         self.log_area.pack(fill=tk.BOTH, expand=True)
         self.log_area.configure(state="disabled")
@@ -39,15 +41,15 @@ class HelpTabUI:
         frame.pack(fill=tk.BOTH, expand=True)
 
         help_text = tk.Text(
-            frame, wrap=tk.WORD, font=("Segoe UI", 10),
-            bg="#1e1e1e", fg="#ffffff", borderwidth=0,
+            frame, wrap=tk.WORD, font=FONT_BODY,
+            bg=TERMINAL_BG, fg=TERMINAL_FG, borderwidth=0,
             highlightthickness=0, padx=8, pady=8,
         )
         help_text.pack(fill=tk.BOTH, expand=True)
 
         def _insert_link(widget, label, url):
             tag = f"link_{url}"
-            widget.tag_configure(tag, foreground="#5a9fd4", underline=True)
+            widget.tag_configure(tag, foreground=LINK, underline=True)
             widget.tag_bind(tag, "<Enter>", lambda _e: widget.config(cursor="hand2"))
             widget.tag_bind(tag, "<Leave>", lambda _e: widget.config(cursor=""))
             widget.tag_bind(tag, "<Button-1>", lambda _e: webbrowser.open(url))

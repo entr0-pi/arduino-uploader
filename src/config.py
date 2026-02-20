@@ -28,6 +28,7 @@ class AppConfig:
     littlefs_page_size: int = 256
     littlefs_raw_target_dir: str = ""
     littlefs_gzip_target_dir: str = ""
+    verify_after_write: bool = False
 
 
 def _is_path_field(field_name: str) -> bool:

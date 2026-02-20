@@ -2,10 +2,13 @@
 
 import os
 import threading
+import time
 import tkinter as tk
 from datetime import datetime
-from tkinter import ttk
+from tkinter import messagebox, ttk
+from typing import Callable
 
+from ..exceptions import UploaderError
 from ..config import (
     AppConfig,
     config_file_path,
@@ -47,6 +50,9 @@ class ESPUploaderGUI:
         self._progress_window: tk.Toplevel | None = None
         self._progress_bar: ttk.Progressbar | None = None
         self._progress_label: ttk.Label | None = None
+        self._progress_time_label: ttk.Label | None = None
+        self._progress_start_time: float | None = None
+        self._progress_timer_id: str | None = None
 
         # Build tabs
         self.tabs = ttk.Notebook(self.root)
@@ -122,6 +128,8 @@ class ESPUploaderGUI:
     def show_progress(self, title: str = "Operation Progress"):
         self._ensure_progress_window()
         self._progress_window.title(title)
+        self._progress_start_time = time.time()
+        self._update_progress_timer()
         self._progress_window.update_idletasks()
         w = self._progress_window.winfo_width()
         h = self._progress_window.winfo_height()
@@ -145,6 +153,9 @@ class ESPUploaderGUI:
     def close_progress(self, delay_ms: int = 700):
         if self._progress_window is None or not self._progress_window.winfo_exists():
             return
+        if self._progress_timer_id is not None:
+            self.root.after_cancel(self._progress_timer_id)
+            self._progress_timer_id = None
         self._progress_window.after(delay_ms, self._progress_window.withdraw)
 
     def _ensure_progress_window(self):
@@ -152,7 +163,7 @@ class ESPUploaderGUI:
             return
         self._progress_window = tk.Toplevel(self.root)
         self._progress_window.title("Operation Progress")
-        self._progress_window.geometry("420x82")
+        self._progress_window.geometry("420x110")
         self._progress_window.resizable(False, False)
         self._progress_window.transient(self.root)
 
@@ -160,10 +171,64 @@ class ESPUploaderGUI:
         frame.pack(fill=tk.BOTH, expand=True)
         self._progress_bar = ttk.Progressbar(frame, variable=self._progress_var, maximum=100, mode="determinate")
         self._progress_bar.pack(fill=tk.X)
-        self._progress_label = ttk.Label(frame, textvariable=self._progress_message_var, font=("Segoe UI", 9))
+        from .theme import FONT_SMALL
+        self._progress_label = ttk.Label(frame, textvariable=self._progress_message_var, font=FONT_SMALL)
         self._progress_label.pack(anchor=tk.W, pady=(4, 0))
 
+        time_frame = ttk.Frame(frame)
+        time_frame.pack(fill=tk.X, pady=(4, 0))
+        self._progress_time_label = ttk.Label(time_frame, text="Elapsed: 00:00", font=FONT_SMALL)
+        self._progress_time_label.pack(anchor=tk.E)
+
         self._progress_window.protocol("WM_DELETE_WINDOW", self._progress_window.withdraw)
+
+    def _update_progress_timer(self):
+        """Update elapsed time display; reschedule to run again in 1 second."""
+        if self._progress_start_time is None:
+            return
+        elapsed_sec = int(time.time() - self._progress_start_time)
+        minutes = elapsed_sec // 60
+        seconds = elapsed_sec % 60
+        if self._progress_time_label is not None:
+            self._progress_time_label.config(text=f"Elapsed: {minutes:02d}:{seconds:02d}")
+        # Reschedule for 1 second later
+        if self._progress_window is not None and self._progress_window.winfo_exists():
+            self._progress_timer_id = self.root.after(1000, self._update_progress_timer)
+
+    # ------------------------------------------------------------------
+    # Background operation wrapper
+    # ------------------------------------------------------------------
+
+    def run_background_operation(
+        self,
+        title: str,
+        worker_fn: Callable[[], None],
+        success_message: str,
+        error_title: str = "Error",
+    ) -> None:
+        """Run *worker_fn* in a background thread with progress and button management."""
+        self.show_progress(title)
+        self.set_buttons_busy(True)
+
+        def _wrapper():
+            try:
+                worker_fn()
+                self.log(f"[SUCCESS] {success_message}")
+                self.root.after(0, messagebox.showinfo, "Success", success_message)
+            except UploaderError as e:
+                self.log(f"[ERROR] {e}")
+                detail = str(e)
+                if e.remediation:
+                    detail += f"\n\nSuggested fix:\n{e.remediation}"
+                self.root.after(0, messagebox.showerror, error_title, detail)
+            except Exception as e:
+                self.log(f"[ERROR] {e}")
+                self.root.after(0, messagebox.showerror, error_title, str(e))
+            finally:
+                self.root.after(0, self.close_progress)
+                self.root.after(0, self.set_buttons_busy, False)
+
+        threading.Thread(target=_wrapper, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Button state management

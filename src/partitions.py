@@ -3,6 +3,8 @@
 import csv
 from typing import Callable
 
+from .exceptions import PartitionLookupError
+
 
 def parse_partition_table(
     csv_file: str,
@@ -46,8 +48,14 @@ def get_partition(
     import os
 
     if not os.path.isfile(csv_file):
-        raise ValueError("Select a valid partition CSV first.")
+        raise PartitionLookupError(
+            "Select a valid partition CSV first.",
+            remediation="Use the Configuration tab to browse for your partitions.csv file.",
+        )
     for entry in parse_partition_table(csv_file, logger=logger):
         if entry["subtype"] == subtype:
             return entry
-    raise ValueError(f"Partition subtype '{subtype}' not found in CSV.")
+    raise PartitionLookupError(
+        f"Partition subtype '{subtype}' not found in CSV.",
+        remediation=f"Ensure your partitions.csv contains a partition with subtype '{subtype}'.",
+    )

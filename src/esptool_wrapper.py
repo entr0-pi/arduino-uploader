@@ -5,6 +5,7 @@ import subprocess
 import sys
 from typing import Callable
 
+from .exceptions import ToolExecutionError
 from .validators import sanitize_chip
 
 
@@ -61,9 +62,8 @@ def run_python(
         if result.stderr:
             logger(result.stderr.rstrip())
     if check and result.returncode != 0:
-        raise subprocess.CalledProcessError(
-            result.returncode, cmd, output=result.stdout, stderr=result.stderr
-        )
+        tool_name = next((a for a in args if not a.startswith("-")), args[0] if args else "unknown")
+        raise ToolExecutionError(tool_name, result.returncode, stderr=result.stderr or "")
     return result
 
 
@@ -72,10 +72,27 @@ def run_with_fallbacks(
     logger: Callable[[str], None] | None = None,
 ) -> subprocess.CompletedProcess:
     """Try multiple command variants, return first success."""
-    last = None
+    last: Exception | None = None
     for args in variants:
         try:
             return run_python(args, check=True, logger=logger)
-        except subprocess.CalledProcessError as exc:
+        except (ToolExecutionError, subprocess.CalledProcessError) as exc:
             last = exc
     raise last if last else RuntimeError("No command variant provided")
+
+
+def read_flash_region(
+    chip: str,
+    port: str,
+    baud: str,
+    offset: int,
+    size: int,
+    output_path: str,
+    logger: Callable[[str], None] | None = None,
+) -> None:
+    """Read a region of flash to a local file using esptool."""
+    run_python(
+        ["-m", "esptool", "--chip", chip, "--port", port, "--baud", baud,
+         "read_flash", hex(offset), hex(size), output_path],
+        logger=logger,
+    )
