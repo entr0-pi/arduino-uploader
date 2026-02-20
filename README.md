@@ -130,7 +130,7 @@ These tools are **not** Python packages — they are standalone binaries/scripts
 1. Ensure the Configuration tab shows **Ready** status
 2. Go to the **Littlefs Upload** tab
 3. Click **Build & Flash LittleFS**
-4. A progress window tracks: staging data files, staging web files, building image, flashing
+4. A progress window tracks: staging copy-mode files, staging gzip-mode files, building image, flashing
 
 The tool automatically:
 - Reads the SPIFFS partition offset and size from your `partitions.csv`
@@ -284,8 +284,7 @@ Persisted fields:
 | `erase_nvs` | Erase NVS partition before write (boolean) |
 | `mklittlefs_path` | Path to `mklittlefs` binary |
 | `nvs_gen_py` | Path to `nvs_partition_gen.py` |
-| `data_dir` | Path to data directory for LittleFS |
-| `web_dir` | Path to web directory for LittleFS |
+| `littlefs_entries` | List of LittleFS source entries (`source_dir`, `target_dir`, `mode`) |
 | `nvs_keys_h_path` | Path to `nvs_keys.h` (optional) |
 
 ---

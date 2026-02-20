@@ -2,7 +2,7 @@
 
 import os
 
-from src.littlefs import human_bytes, _resolve_target_dir, stage_data_files, stage_web_files
+from src.littlefs import human_bytes, _resolve_target_dir, stage_copy_files, stage_gzip_files
 
 
 class TestHumanBytes:
@@ -49,17 +49,17 @@ class TestResolveTargetDir:
         assert result == os.path.join(str(tmp_path), "a", "b")
 
 
-class TestStageDataFiles:
+class TestStageCopyFiles:
     def test_copies_files(self, tmp_path):
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "file1.txt").write_text("hello")
-        (data_dir / "file2.txt").write_text("world")
+        source_dir = tmp_path / "source_copy"
+        source_dir.mkdir()
+        (source_dir / "file1.txt").write_text("hello")
+        (source_dir / "file2.txt").write_text("world")
 
         staging = tmp_path / "staging"
         staging.mkdir()
 
-        count = stage_data_files(str(data_dir), str(staging))
+        count = stage_copy_files(str(source_dir), str(staging))
         assert count == 2
         assert (staging / "file1.txt").exists()
         assert (staging / "file2.txt").exists()
@@ -67,32 +67,32 @@ class TestStageDataFiles:
     def test_missing_dir_returns_zero(self, tmp_path):
         staging = tmp_path / "staging"
         staging.mkdir()
-        count = stage_data_files(str(tmp_path / "nonexistent"), str(staging))
+        count = stage_copy_files(str(tmp_path / "nonexistent"), str(staging))
         assert count == 0
 
     def test_with_target_subdir(self, tmp_path):
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "a.txt").write_text("data")
+        source_dir = tmp_path / "source_copy"
+        source_dir.mkdir()
+        (source_dir / "a.txt").write_text("content")
 
         staging = tmp_path / "staging"
         staging.mkdir()
 
-        count = stage_data_files(str(data_dir), str(staging), target_subdir="sub")
+        count = stage_copy_files(str(source_dir), str(staging), target_subdir="sub")
         assert count == 1
         assert (staging / "sub" / "a.txt").exists()
 
 
-class TestStageWebFiles:
+class TestStageGzipFiles:
     def test_creates_gzip_files(self, tmp_path):
-        web_dir = tmp_path / "web"
-        web_dir.mkdir()
-        (web_dir / "index.html").write_text("<html>hello</html>")
+        source_dir = tmp_path / "source_gzip"
+        source_dir.mkdir()
+        (source_dir / "index.html").write_text("<html>hello</html>")
 
         staging = tmp_path / "staging"
         staging.mkdir()
 
-        count = stage_web_files(str(web_dir), str(staging))
+        count = stage_gzip_files(str(source_dir), str(staging))
         assert count == 1
         assert (staging / "index.html.gz").exists()
         assert (staging / "index.html.gz").stat().st_size > 0
@@ -100,5 +100,5 @@ class TestStageWebFiles:
     def test_missing_dir_returns_zero(self, tmp_path):
         staging = tmp_path / "staging"
         staging.mkdir()
-        count = stage_web_files(str(tmp_path / "nonexistent"), str(staging))
+        count = stage_gzip_files(str(tmp_path / "nonexistent"), str(staging))
         assert count == 0

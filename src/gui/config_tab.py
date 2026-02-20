@@ -7,7 +7,7 @@ from tkinter import filedialog, ttk
 
 from ..esptool_wrapper import detect_chip_family, detect_serial_ports
 from ..validators import VALID_CHIPS, sanitize_chip
-from .theme import ERROR, FONT_BODY, FONT_HEADING, FONT_MONO_SMALL, FONT_STATUS, MUTED, OK, WARN
+from .theme import ERROR, FONT_BODY, FONT_HEADING, FONT_STATUS, OK, WARN
 
 COMMON_BAUD_RATES = ["115200", "230400", "460800", "921600"]
 
@@ -40,8 +40,6 @@ class ConfigTabUI:
         self.csv_path_var = tk.StringVar(value=self.app.config.csv_path)
         self.mklittlefs_path_var = tk.StringVar(value=self.app.config.mklittlefs_path)
         self.nvs_gen_py_var = tk.StringVar(value=self.app.config.nvs_gen_py)
-        self.data_dir_var = tk.StringVar(value=self.app.config.data_dir)
-        self.web_dir_var = tk.StringVar(value=self.app.config.web_dir)
         self.nvs_keys_h_var = tk.StringVar(value=self.app.config.nvs_keys_h_path)
         self.erase_fs_var = tk.BooleanVar(value=self.app.config.erase_fs)
         self.erase_nvs_var = tk.BooleanVar(value=self.app.config.erase_nvs)
@@ -52,8 +50,14 @@ class ConfigTabUI:
         self.show_advanced_var = tk.BooleanVar(value=False)
 
         # Refresh status when paths change
-        for var in (self.csv_path_var, self.mklittlefs_path_var, self.nvs_gen_py_var,
-                    self.data_dir_var, self.web_dir_var, self.baud_var, self.block_size_var, self.page_size_var):
+        for var in (
+            self.csv_path_var,
+            self.mklittlefs_path_var,
+            self.nvs_gen_py_var,
+            self.baud_var,
+            self.block_size_var,
+            self.page_size_var,
+        ):
             var.trace_add("write", lambda *_a: self.app.root.after_idle(self.refresh_status))
 
         # Card 1: serial/chip/partition + tools
@@ -65,7 +69,7 @@ class ConfigTabUI:
 
         ttk.Label(card1, text="Serial Port").grid(row=0, column=0, sticky=tk.W)
         ttk.Label(card1, text="Chip Family").grid(row=0, column=1, sticky=tk.W)
-        ttk.Label(card1, text="Partitions Definition (.csv)").grid(row=0, column=2, sticky=tk.W)
+        ttk.Label(card1, text="Partitions Definition (.csv)").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(2, 0))
 
         self.port_combo = ttk.Combobox(card1, textvariable=self.port_var, width=16)
         self.port_combo.grid(row=1, column=0, sticky=tk.EW, padx=(0, 12), pady=(4, 10))
@@ -76,30 +80,26 @@ class ConfigTabUI:
             width=16,
         ).grid(row=1, column=1, sticky=tk.W, padx=(0, 12), pady=(4, 10))
 
-        tools_grid = ttk.Frame(card1)
-        tools_grid.grid(row=2, column=0, columnspan=3, sticky=tk.EW, pady=(2, 0))
-        tools_grid.columnconfigure(0, weight=1)
-        tools_grid.columnconfigure(1, weight=1)
-
         csv_row = ttk.Frame(card1)
-        csv_row.grid(row=1, column=2, sticky=tk.EW, pady=(4, 10))
+        csv_row.grid(row=3, column=0, columnspan=3, sticky=tk.EW, pady=(4, 10))
         csv_row.columnconfigure(0, weight=1)
         ttk.Entry(csv_row, textvariable=self.csv_path_var).grid(row=0, column=0, sticky=tk.EW)
         ttk.Button(csv_row, text="Browse", command=self._browse_csv).grid(row=0, column=1, padx=(8, 0))
 
-        ttk.Label(tools_grid, text="Binary for mklittlefs (path)").grid(row=0, column=0, sticky=tk.W)
-        ttk.Label(tools_grid, text="Script nvs_partition_gen.py (path)").grid(row=0, column=1, sticky=tk.W, padx=(6, 0))
+        ttk.Label(card1, text="Binary for mklittlefs (path)").grid(row=4, column=0, columnspan=3, sticky=tk.W)
 
-        mkl_row = ttk.Frame(tools_grid)
-        mkl_row.grid(row=1, column=0, sticky=tk.EW, padx=(0, 6), pady=(4, 0))
+        mkl_row = ttk.Frame(card1)
+        mkl_row.grid(row=5, column=0, columnspan=3, sticky=tk.EW, pady=(4, 10))
         mkl_row.columnconfigure(0, weight=1)
         ttk.Entry(mkl_row, textvariable=self.mklittlefs_path_var).grid(row=0, column=0, sticky=tk.EW)
         ttk.Button(
             mkl_row, text="Browse", command=lambda: self._browse_file(self.mklittlefs_path_var, "Executable", "*")
         ).grid(row=0, column=1, padx=(8, 0))
 
-        nvs_gen_row = ttk.Frame(tools_grid)
-        nvs_gen_row.grid(row=1, column=1, sticky=tk.EW, padx=(6, 0), pady=(4, 0))
+        ttk.Label(card1, text="Script nvs_partition_gen.py (path)").grid(row=6, column=0, columnspan=3, sticky=tk.W)
+
+        nvs_gen_row = ttk.Frame(card1)
+        nvs_gen_row.grid(row=7, column=0, columnspan=3, sticky=tk.EW, pady=(4, 0))
         nvs_gen_row.columnconfigure(0, weight=1)
         ttk.Entry(nvs_gen_row, textvariable=self.nvs_gen_py_var).grid(row=0, column=0, sticky=tk.EW)
         ttk.Button(
@@ -112,13 +112,19 @@ class ConfigTabUI:
             text="Show advanced parameters (baud, block size, page size)",
             variable=self.show_advanced_var,
             command=self._toggle_advanced_params,
-        ).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ).grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        save_row = ttk.Frame(card1)
+        save_row.grid(row=9, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ttk.Button(save_row, text="Save Configuration", command=self.app.save_config).pack(side=tk.LEFT)
+        self.readiness_label = ttk.Label(save_row, text="READY", font=FONT_STATUS)
+        self.readiness_label.pack(side=tk.LEFT, padx=(6, 0))
 
         self.adv_row = ttk.Frame(card1)
-        self.adv_row.grid(row=4, column=0, columnspan=3, sticky=tk.EW, pady=(8, 0))
+        self.adv_row.grid(row=10, column=0, columnspan=3, sticky=tk.EW, pady=(8, 0))
         self.adv_row.columnconfigure(0, weight=1)
         self.adv_row.columnconfigure(1, weight=1)
         self.adv_row.columnconfigure(2, weight=1)
+        self.adv_row.columnconfigure(3, weight=1)
 
         ttk.Label(self.adv_row, text="Esptool baud rate").grid(row=0, column=0, sticky=tk.W)
         ttk.Label(self.adv_row, text="LittleFS block size").grid(row=0, column=1, sticky=tk.W, padx=(6, 0))
@@ -137,73 +143,20 @@ class ConfigTabUI:
             self.adv_row,
             text="Verify after write (slower)",
             variable=self.verify_var,
-        ).grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ).grid(row=1, column=3, sticky=tk.W, padx=(8, 0), pady=(4, 0))
         self._toggle_advanced_params()
 
-        # Card 2: directories + nvs keys
-        card2 = ttk.LabelFrame(container, text="Paths", padding=12)
-        card2.pack(fill=tk.X, pady=(0, 10))
-        card2.columnconfigure(0, weight=1)
-        card2.columnconfigure(1, weight=1)
-
-        ttk.Label(card2, text="LittleFS raw files (folder)").grid(row=0, column=0, sticky=tk.W)
-        ttk.Label(card2, text="LittleFS files to gzip (folder)").grid(row=0, column=1, sticky=tk.W)
-
-        data_row = ttk.Frame(card2)
-        data_row.grid(row=1, column=0, sticky=tk.EW, padx=(0, 12), pady=(4, 10))
-        data_row.columnconfigure(0, weight=1)
-        ttk.Entry(data_row, textvariable=self.data_dir_var).grid(row=0, column=0, sticky=tk.EW)
-        ttk.Button(data_row, text="Browse", command=lambda: self._browse_dir(self.data_dir_var)).grid(row=0, column=1, padx=(8, 0))
-
-        web_row = ttk.Frame(card2)
-        web_row.grid(row=1, column=1, sticky=tk.EW, pady=(4, 10))
-        web_row.columnconfigure(0, weight=1)
-        ttk.Entry(web_row, textvariable=self.web_dir_var).grid(row=0, column=0, sticky=tk.EW)
-        ttk.Button(web_row, text="Browse", command=lambda: self._browse_dir(self.web_dir_var)).grid(row=0, column=1, padx=(8, 0))
-
-        ttk.Label(card2, text="NVS consistency check - nvs_keys.h (optional)").grid(row=2, column=0, sticky=tk.W)
-        nvs_keys_row = ttk.Frame(card2)
-        nvs_keys_row.grid(row=3, column=0, sticky=tk.EW, padx=(0, 12), pady=(4, 0))
-        nvs_keys_row.columnconfigure(0, weight=1)
-        ttk.Entry(nvs_keys_row, textvariable=self.nvs_keys_h_var).grid(row=0, column=0, sticky=tk.EW)
-        ttk.Button(
-            nvs_keys_row, text="Browse", command=lambda: self._browse_file(self.nvs_keys_h_var, "Header", "*.h")
-        ).grid(row=0, column=1, padx=(8, 0))
-
-        # Card 3: options + status + actions
-        card3 = ttk.LabelFrame(container, text="Environment & Actions", padding=12)
+        # Card 2: options + status + actions
+        card3 = ttk.LabelFrame(container, text="Environement status", padding=12)
         card3.pack(fill=tk.X)
 
-        status_row = ttk.Frame(card3)
-        status_row.pack(fill=tk.X, pady=(0, 0))
-        status_row.columnconfigure(0, weight=1)
-        status_row.columnconfigure(1, weight=1)
-
-        status_libs = ttk.LabelFrame(status_row, text="Environment Status - Libraries", padding=10)
-        status_libs.grid(row=0, column=0, sticky=tk.NSEW, padx=(0, 6))
-        status_files = ttk.LabelFrame(status_row, text="Environment Status - Files", padding=10)
-        status_files.grid(row=0, column=1, sticky=tk.NSEW, padx=(6, 0))
+        status_libs = ttk.Frame(card3, padding=(2, 4))
+        status_libs.pack(fill=tk.X, pady=(0, 10))
 
         self.status_labels = {}
-        for key in ("port", "mklittlefs", "nvsgen", "csv"):
+        for key in ("mklittlefs", "nvsgen", "csv"):
             self.status_labels[key] = ttk.Label(status_libs, text="", font=FONT_BODY)
             self.status_labels[key].pack(anchor=tk.W, pady=2)
-        for key in ("data", "data_files", "web", "web_files"):
-            lbl = ttk.Label(status_files, text="", font=FONT_BODY)
-            if key.endswith("_files"):
-                lbl.configure(font=FONT_MONO_SMALL, foreground=MUTED)
-                lbl.pack(anchor=tk.W, pady=(0, 4), padx=(16, 0))
-            else:
-                lbl.pack(anchor=tk.W, pady=2)
-            self.status_labels[key] = lbl
-
-        # Buttons
-        btns = ttk.Frame(card3)
-        btns.pack(fill=tk.X, pady=(16, 0))
-        ttk.Button(btns, text="Refresh", command=self._on_refresh_click).pack(side=tk.LEFT)
-        ttk.Button(btns, text="Save Configuration", command=self.app.save_config).pack(side=tk.LEFT, padx=(8, 0))
-        self.readiness_label = ttk.Label(btns, text="", font=FONT_STATUS)
-        self.readiness_label.pack(side=tk.LEFT, padx=(20, 0))
 
     # ------------------------------------------------------------------
     # Browse helpers
@@ -216,11 +169,6 @@ class ConfigTabUI:
 
     def _browse_file(self, tk_var, label, pattern):
         p = filedialog.askopenfilename(filetypes=[(label, pattern), ("All", "*")])
-        if p:
-            tk_var.set(p)
-
-    def _browse_dir(self, tk_var):
-        p = filedialog.askdirectory()
         if p:
             tk_var.set(p)
 
@@ -299,32 +247,7 @@ class ConfigTabUI:
             "csv": bool(self.csv_path_var.get() and os.path.isfile(self.csv_path_var.get())),
         }
 
-        # Data directory
-        data_dir = self.data_dir_var.get()
-        data_dir_exists = bool(data_dir) and os.path.isdir(data_dir)
-        data_files: list[str] = []
-        if data_dir_exists:
-            data_files = sorted(
-                f for f in os.listdir(data_dir)
-                if os.path.isfile(os.path.join(data_dir, f))
-            )
-
-        # Web directory
-        web_dir = self.web_dir_var.get()
-        web_dir_exists = bool(web_dir) and os.path.isdir(web_dir)
-        web_files: list[str] = []
-        if web_dir_exists:
-            web_files = sorted(
-                f for f in os.listdir(web_dir)
-                if os.path.isfile(os.path.join(web_dir, f))
-            )
-
         # Update labels
-        port_text = self.port_var.get().strip() or "Not selected"
-        self.status_labels["port"].config(
-            text=f"Serial port: {port_text}",
-            foreground=ok_color if checks["port"] else warn_color,
-        )
         self.status_labels["mklittlefs"].config(
             text=f"mklittlefs: {'Found' if checks['mklittlefs'] else 'Missing'}",
             foreground=ok_color if checks["mklittlefs"] else err_color,
@@ -338,46 +261,27 @@ class ConfigTabUI:
             foreground=ok_color if checks["csv"] else err_color,
         )
 
-        if not data_dir:
-            self.status_labels["data"].config(text="Raw data dir: Not configured", foreground=warn_color)
-            self.status_labels["data_files"].config(text="")
-        elif not data_dir_exists:
-            self.status_labels["data"].config(text="Raw data dir: Path not found", foreground=err_color)
-            self.status_labels["data_files"].config(text="")
-        elif not data_files:
-            self.status_labels["data"].config(text="Raw data dir: 0 files", foreground=warn_color)
-            self.status_labels["data_files"].config(text="")
-        else:
-            label = "file" if len(data_files) == 1 else "files"
-            self.status_labels["data"].config(text=f"Raw data dir: {len(data_files)} {label}", foreground=ok_color)
-            self.status_labels["data_files"].config(text=", ".join(data_files))
+        littlefs_entries = self.app.config.littlefs_entries if isinstance(self.app.config.littlefs_entries, list) else []
+        normalized_sources = [
+            str(item.get("source_dir", "")).strip()
+            for item in littlefs_entries
+            if isinstance(item, dict) and str(item.get("source_dir", "")).strip()
+        ]
+        fs_sources_ready = bool(normalized_sources) and all(os.path.isdir(path) for path in normalized_sources)
 
-        if not web_dir:
-            self.status_labels["web"].config(text="Gzip data dir: Not configured", foreground=warn_color)
-            self.status_labels["web_files"].config(text="")
-        elif not web_dir_exists:
-            self.status_labels["web"].config(text="Gzip data dir: Path not found", foreground=err_color)
-            self.status_labels["web_files"].config(text="")
-        elif not web_files:
-            self.status_labels["web"].config(text="Gzip data dir: 0 files", foreground=warn_color)
-            self.status_labels["web_files"].config(text="")
-        else:
-            label = "file" if len(web_files) == 1 else "files"
-            self.status_labels["web"].config(text=f"Gzip data dir: {len(web_files)} {label}", foreground=ok_color)
-            self.status_labels["web_files"].config(text=", ".join(web_files))
-
-        fs_ready = checks["mklittlefs"] and checks["csv"]
+        fs_ready = checks["mklittlefs"] and checks["csv"] and fs_sources_ready
+        fs_ready_label = checks["mklittlefs"] and checks["csv"]
         nvs_ready = checks["nvsgen"] and checks["csv"]
 
         # Update action buttons via app
         self.app.set_flash_ready(fs_ready)
         self.app.set_nvs_ready(nvs_ready)
 
-        if fs_ready and nvs_ready and checks["port"]:
+        if fs_ready_label and nvs_ready and checks["port"]:
             self.readiness_label.config(text="\u2705 Ready", foreground=ok_color)
-        elif fs_ready and nvs_ready:
+        elif fs_ready_label and nvs_ready:
             self.readiness_label.config(text="\u26a0\ufe0f Ready (no port selected)", foreground=warn_color)
-        elif fs_ready or nvs_ready:
+        elif fs_ready_label or nvs_ready:
             missing = []
             if not checks["port"]:
                 missing.append("serial port")
@@ -387,7 +291,7 @@ class ConfigTabUI:
                 missing.append("mklittlefs")
             if not checks["nvsgen"]:
                 missing.append("nvs_partition_gen")
-            scope = "LittleFS only" if fs_ready else "NVS only"
+            scope = "LittleFS only" if fs_ready_label else "NVS only"
             detail = f" \u2014 missing: {', '.join(missing)}" if missing else ""
             self.readiness_label.config(text=f"\u26a0\ufe0f Partially ready ({scope}){detail}", foreground=warn_color)
         else:
@@ -403,6 +307,9 @@ class ConfigTabUI:
             self.readiness_label.config(
                 text=f"\u274c Not ready \u2014 missing: {', '.join(missing)}", foreground=err_color,
             )
+
+        if hasattr(self.app, "flash_tab") and hasattr(self.app.flash_tab, "refresh_file_status"):
+            self.app.flash_tab.refresh_file_status()
 
         return fs_ready
 
@@ -421,8 +328,6 @@ class ConfigTabUI:
         cfg.verify_after_write = self.verify_var.get()
         cfg.mklittlefs_path = self.mklittlefs_path_var.get()
         cfg.nvs_gen_py = self.nvs_gen_py_var.get()
-        cfg.data_dir = self.data_dir_var.get()
-        cfg.web_dir = self.web_dir_var.get()
         cfg.nvs_keys_h_path = self.nvs_keys_h_var.get()
         cfg.esptool_baud = self.baud_var.get()
         try:
@@ -447,8 +352,6 @@ class ConfigTabUI:
         self.verify_var.set(cfg.verify_after_write)
         self.mklittlefs_path_var.set(cfg.mklittlefs_path)
         self.nvs_gen_py_var.set(cfg.nvs_gen_py)
-        self.data_dir_var.set(cfg.data_dir)
-        self.web_dir_var.set(cfg.web_dir)
         self.nvs_keys_h_var.set(cfg.nvs_keys_h_path)
         self.baud_var.set(cfg.esptool_baud)
         self.block_size_var.set(str(cfg.littlefs_block_size))

@@ -5,7 +5,7 @@ import os
 import platform
 import shutil
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 
 
 @dataclass
@@ -20,14 +20,11 @@ class AppConfig:
     erase_nvs: bool = False
     mklittlefs_path: str = ""
     nvs_gen_py: str = ""
-    data_dir: str = ""
-    web_dir: str = ""
     nvs_keys_h_path: str = ""
     esptool_baud: str = "921600"
     littlefs_block_size: int = 4096
     littlefs_page_size: int = 256
-    littlefs_raw_target_dir: str = ""
-    littlefs_gzip_target_dir: str = ""
+    littlefs_entries: list[dict[str, str]] = field(default_factory=list)
     verify_after_write: bool = False
 
 
@@ -130,6 +127,25 @@ def load_config(config_file: str) -> AppConfig:
         valid_fields = {fld.name for fld in fields(AppConfig)}
         for key, value in data.items():
             if key in valid_fields:
+                if key == "littlefs_entries":
+                    cleaned: list[dict[str, str]] = []
+                    if isinstance(value, list):
+                        for item in value:
+                            if not isinstance(item, dict):
+                                continue
+                            source_dir = str(item.get("source_dir", "")).strip()
+                            target_dir = str(item.get("target_dir", "")).strip()
+                            mode = str(item.get("mode", "raw")).strip().lower()
+                            if mode not in {"raw", "gzip"}:
+                                mode = "raw"
+                            cleaned.append(
+                                {
+                                    "source_dir": source_dir,
+                                    "target_dir": target_dir,
+                                    "mode": mode,
+                                }
+                            )
+                    value = cleaned
                 if _is_path_field(key) and isinstance(value, str):
                     value = _normalize_path(value)
                 setattr(cfg, key, value)

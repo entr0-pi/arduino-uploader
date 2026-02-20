@@ -19,6 +19,7 @@ class NvsTabUI:
         app.tabs.add(self.frame, text="  NVS Editor  ")
 
         self._nvs_consistency_issues: list[str] = []
+        self._last_consistency_snapshot: tuple | None = None
         self._build()
 
     # ------------------------------------------------------------------
@@ -31,18 +32,26 @@ class NvsTabUI:
 
         ttk.Label(container, text="NVS Variables", font=FONT_SUBHEADING).pack(anchor=tk.W, pady=(0, 10))
 
+        header_path_row = ttk.LabelFrame(container, text="NVS Header path", padding=10)
+        header_path_row.pack(fill=tk.X, pady=(0, 10))
+        header_path_row.columnconfigure(0, weight=1)
+        self.unlock_meta_var = tk.BooleanVar(value=False)
+        ttk.Entry(header_path_row, textvariable=self.app.config_tab.nvs_keys_h_var).grid(row=0, column=0, sticky=tk.EW)
+        ttk.Button(header_path_row, text="Browse", command=self._browse_header_path).grid(row=0, column=1, padx=(8, 0))
+        ttk.Checkbutton(
+            header_path_row,
+            text="Expert Mode",
+            variable=self.unlock_meta_var,
+            command=self._apply_meta_lock_state,
+        ).grid(row=0, column=2, sticky=tk.E, padx=(12, 0))
+        self.app.config_tab.nvs_keys_h_var.trace_add("write", lambda *_a: self._update_consistency_label())
+
         # Entry fields
         top = ttk.Frame(container)
         top.pack(fill=tk.X)
 
-        self.unlock_meta_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            top, text="Unlock namespace/key/type/encoding (at your own risk)",
-            variable=self.unlock_meta_var, command=self._apply_meta_lock_state,
-        ).grid(row=0, column=0, columnspan=6, sticky=tk.W, pady=(0, 8))
-
         for col, label in enumerate(("Namespace", "Key", "Type", "Encoding", "Value")):
-            ttk.Label(top, text=label).grid(row=1, column=col, sticky=tk.W)
+            ttk.Label(top, text=label).grid(row=0, column=col, sticky=tk.W)
 
         self.ns_var = tk.StringVar(value="storage")
         self.key_var = tk.StringVar()
@@ -51,22 +60,22 @@ class NvsTabUI:
         self.val_var = tk.StringVar()
 
         self.ns_entry = ttk.Entry(top, textvariable=self.ns_var, width=20)
-        self.ns_entry.grid(row=2, column=0, sticky=tk.EW, padx=(0, 8))
+        self.ns_entry.grid(row=1, column=0, sticky=tk.EW, padx=(0, 8))
         self.key_entry = ttk.Entry(top, textvariable=self.key_var, width=18)
-        self.key_entry.grid(row=2, column=1, sticky=tk.EW, padx=(0, 8))
+        self.key_entry.grid(row=1, column=1, sticky=tk.EW, padx=(0, 8))
         self.type_combo = ttk.Combobox(
             top, textvariable=self.type_var,
             values=["data", "namespace", "file", "key"], width=10,
         )
-        self.type_combo.grid(row=2, column=2, sticky=tk.EW, padx=(0, 8))
+        self.type_combo.grid(row=1, column=2, sticky=tk.EW, padx=(0, 8))
         self.enc_combo = ttk.Combobox(
             top, textvariable=self.enc_var,
             values=["string", "u8", "i8", "u16", "u32", "i32", "base64", "hex2bin", "binary"],
             width=12,
         )
-        self.enc_combo.grid(row=2, column=3, sticky=tk.EW, padx=(0, 8))
-        self.val_entry = ttk.Entry(top, textvariable=self.val_var)
-        self.val_entry.grid(row=2, column=4, sticky=tk.EW)
+        self.enc_combo.grid(row=1, column=3, sticky=tk.EW, padx=(0, 8))
+        self.val_entry = ttk.Entry(top, textvariable=self.val_var, width=36)
+        self.val_entry.grid(row=1, column=4, sticky=tk.EW)
         self.val_entry.bind("<Return>", lambda _e: self._add_or_update())
 
         top.columnconfigure(1, weight=1)
@@ -80,7 +89,7 @@ class NvsTabUI:
         self.tree = ttk.Treeview(
             tree_frame,
             columns=("namespace", "key", "type", "encoding", "value"),
-            show="headings", height=13,
+            show="headings", height=9,
         )
         for c, w in [("namespace", 140), ("key", 180), ("type", 90), ("encoding", 110), ("value", 420)]:
             self.tree.heading(c, text=c.capitalize())
@@ -120,6 +129,7 @@ class NvsTabUI:
         self.write_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.consistency_label = ttk.Label(row_write, text="", font=FONT_SMALL)
         self.consistency_label.pack(side=tk.LEFT, padx=(20, 0))
+        self._schedule_live_consistency_refresh()
 
     # ------------------------------------------------------------------
     # Lock state
@@ -192,6 +202,11 @@ class NvsTabUI:
     # CSV import / export
     # ------------------------------------------------------------------
 
+    def _browse_header_path(self):
+        p = filedialog.askopenfilename(filetypes=[("Header", "*.h"), ("All", "*")])
+        if p:
+            self.app.config_tab.nvs_keys_h_var.set(p)
+
     def _export_csv(self):
         p = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv")])
         if not p:
@@ -228,7 +243,7 @@ class NvsTabUI:
     # ------------------------------------------------------------------
 
     def _update_consistency_label(self):
-        h_path = self.app.config.nvs_keys_h_path
+        h_path = self.app.config_tab.nvs_keys_h_var.get().strip()
         issues = validate_nvs_rows(self._tree_rows(), header_path=h_path)
         if issues:
             n = len(issues)
@@ -243,6 +258,19 @@ class NvsTabUI:
             else:
                 self.consistency_label.config(text="nvs_keys.h not configured \u2014 consistency check skipped", foreground=MUTED)
             self._nvs_consistency_issues = []
+
+    def _consistency_snapshot(self) -> tuple:
+        rows = tuple(self.tree.item(i, "values") for i in self.tree.get_children())
+        return rows, self.app.config_tab.nvs_keys_h_var.get().strip()
+
+    def _schedule_live_consistency_refresh(self):
+        if not self.frame.winfo_exists():
+            return
+        snapshot = self._consistency_snapshot()
+        if snapshot != self._last_consistency_snapshot:
+            self._last_consistency_snapshot = snapshot
+            self._update_consistency_label()
+        self.frame.after(400, self._schedule_live_consistency_refresh)
 
     # ------------------------------------------------------------------
     # Validation dialog

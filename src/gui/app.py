@@ -30,7 +30,7 @@ class ESPUploaderGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("ESP32 LittleFS + NVS Studio")
-        window_w, window_h = 980, 750
+        window_w, window_h = 980, 670
         screen_w = self.root.winfo_screenwidth()
         x = max(0, (screen_w - window_w) // 2)
         self.root.geometry(f"{window_w}x{window_h}+{x}+0")
