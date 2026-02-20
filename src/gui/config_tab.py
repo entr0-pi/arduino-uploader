@@ -109,18 +109,13 @@ class ConfigTabUI:
         # Advanced settings (collapsed by default)
         ttk.Checkbutton(
             card1,
-            text="Show advanced parameters (baud, block size, page size)",
+            text="Expert Mode",
             variable=self.show_advanced_var,
             command=self._toggle_advanced_params,
         ).grid(row=8, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
-        save_row = ttk.Frame(card1)
-        save_row.grid(row=9, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
-        ttk.Button(save_row, text="Save Configuration", command=self.app.save_config).pack(side=tk.LEFT)
-        self.readiness_label = ttk.Label(save_row, text="READY", font=FONT_STATUS)
-        self.readiness_label.pack(side=tk.LEFT, padx=(6, 0))
 
         self.adv_row = ttk.Frame(card1)
-        self.adv_row.grid(row=10, column=0, columnspan=3, sticky=tk.EW, pady=(8, 0))
+        self.adv_row.grid(row=9, column=0, columnspan=3, sticky=tk.EW, pady=(8, 0))
         self.adv_row.columnconfigure(0, weight=1)
         self.adv_row.columnconfigure(1, weight=1)
         self.adv_row.columnconfigure(2, weight=1)
@@ -145,6 +140,11 @@ class ConfigTabUI:
             variable=self.verify_var,
         ).grid(row=1, column=3, sticky=tk.W, padx=(8, 0), pady=(4, 0))
         self._toggle_advanced_params()
+        save_row = ttk.Frame(card1)
+        save_row.grid(row=10, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
+        ttk.Button(save_row, text="Save Configuration", command=self.app.save_config).pack(side=tk.LEFT)
+        self.readiness_label = ttk.Label(save_row, text="READY", font=FONT_STATUS)
+        self.readiness_label.pack(side=tk.LEFT, padx=(6, 0))
 
         # Card 2: options + status + actions
         card3 = ttk.LabelFrame(container, text="Environement status", padding=12)
