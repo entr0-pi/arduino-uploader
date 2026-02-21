@@ -29,11 +29,6 @@ class FlashTabUI:
             container, text="LittleFS Operations",
             font=FONT_HEADING,
         ).pack(anchor=tk.W, pady=(0, 20))
-        ttk.Label(
-            container,
-            text="Use Configuration tab for COM and partition/tool options. This tab manages LittleFS paths and flashing.",
-            font=FONT_BODY,
-        ).pack(anchor=tk.W, pady=(0, 12))
 
         littlefs_paths = ttk.LabelFrame(container, text="LittleFS Paths", padding=10)
         littlefs_paths.pack(fill=tk.X, pady=(0, 10))

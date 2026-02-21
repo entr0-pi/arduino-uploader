@@ -125,27 +125,49 @@ These tools are **not** Python packages — they are standalone binaries/scripts
 5. Verify status indicators are green
 6. Click **Save Configuration** to persist all paths
 
-### Flashing a LittleFS Image
+### Step-by-Step: Flash Data to LittleFS
 
-1. Ensure the Configuration tab shows **Ready** status
-2. Go to the **Littlefs Upload** tab
-3. Click **Build & Flash LittleFS**
-4. A progress window tracks: staging copy-mode files, staging gzip-mode files, building image, flashing
+1. Connect your ESP device by USB and open the app.
+2. In **Configuration**:
+   - Confirm serial **Port** and **Chip** are detected (or select them manually).
+   - Select your `partitions.csv`.
+   - Confirm `mklittlefs` path is valid.
+3. Click **Save Configuration**.
+4. Open the **Littlefs Upload** tab.
+5. In **LittleFS Paths**, add one or more lines:
+   - **Folder path**: source directory on your PC.
+   - **Target folder**: destination path inside LittleFS image.
+   - **Mode**: `raw` (copy as-is) or `gzip` (compress each file).
+6. Click **Save Configuration** in the LittleFS tab.
+7. (Optional) Enable **Erase FS partition before flash**.
+8. Click **Build & Flash LittleFS**.
+9. Wait for completion in the progress/log output:
+   - Files are staged from configured source folders.
+   - Gzip-mode files are compressed.
+   - A LittleFS image is generated with the SPIFFS partition size.
+   - The image is flashed to the SPIFFS partition offset.
+10. Reboot the device if your firmware requires restart to reload filesystem content.
 
-The tool automatically:
-- Reads the SPIFFS partition offset and size from your `partitions.csv`
-- Copies all files from the data directory
-- Copies all files from the web directory (gzipping each file)
-- Builds a LittleFS image sized to match the partition
-- Flashes at the correct offset
+### Step-by-Step: Write Data to NVS
 
-### Managing NVS Variables
-
-1. Go to the **NVS Editor** tab
-2. **Import** an existing NVS CSV file, or add entries manually
-3. Edit values in the table (select a row to load it into the edit fields)
-4. **Export** to save your changes to a CSV file
-5. Click **Write to Device** to generate the NVS binary and flash it
+1. Connect your ESP device by USB and open the app.
+2. In **Configuration**:
+   - Confirm serial **Port** and **Chip** are detected (or select them manually).
+   - Select your `partitions.csv`.
+   - Confirm `nvs_partition_gen.py` path is valid.
+3. Click **Save Configuration**.
+4. Open the **NVS Editor** tab.
+5. (Optional) In **NVS Header path (optional)**, browse to `nvs_keys.h` to enable consistency checks.
+6. Click **Import CSV** to load an existing NVS CSV, or add/update rows manually.
+7. Review/edit values in the table.
+8. (Recommended) Click **Export CSV** to save the CSV snapshot you are about to flash.
+9. If validation warnings are shown (header/value checks), fix them or confirm to continue.
+10. (Optional) Enable **Erase NVS before write** for a clean NVS partition.
+11. Click **Write to Device**.
+12. Wait for completion in the log output:
+    - CSV is converted to NVS binary.
+    - Binary is flashed to the NVS partition offset.
+13. Reboot the device if your firmware reads NVS values only at startup.
 
 ### NVS Consistency Checking
 

@@ -69,7 +69,7 @@ class ConfigTabUI:
 
         ttk.Label(card1, text="Serial Port").grid(row=0, column=0, sticky=tk.W)
         ttk.Label(card1, text="Chip Family").grid(row=0, column=1, sticky=tk.W)
-        ttk.Label(card1, text="Partitions Definition (.csv)").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(2, 0))
+        ttk.Label(card1, text="Partitions Definition (path to .csv)").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(2, 0))
 
         self.port_combo = ttk.Combobox(card1, textvariable=self.port_var, width=16)
         self.port_combo.grid(row=1, column=0, sticky=tk.EW, padx=(0, 12), pady=(4, 10))

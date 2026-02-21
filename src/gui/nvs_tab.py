@@ -32,7 +32,7 @@ class NvsTabUI:
 
         ttk.Label(container, text="NVS Variables", font=FONT_SUBHEADING).pack(anchor=tk.W, pady=(0, 10))
 
-        header_path_row = ttk.LabelFrame(container, text="NVS Header path", padding=10)
+        header_path_row = ttk.LabelFrame(container, text="NVS Header path (optional)", padding=10)
         header_path_row.pack(fill=tk.X, pady=(0, 10))
         header_path_row.columnconfigure(0, weight=1)
         self.unlock_meta_var = tk.BooleanVar(value=False)
